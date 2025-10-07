@@ -1,11 +1,15 @@
 #!/bin/bash
 
-# Directory to store JSON files
+# Directory to store Pokémon data
 data_dir="pokemon_data_parallel"
 mkdir -p "$data_dir"
 
-# List of Pokémon to fetch
+# List of Pokémon
 pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
+
+# File to store errors
+error_log="parallel_errors.log"
+> "$error_log"
 
 echo "Starting parallel Pokémon data fetch..."
 
@@ -13,20 +17,34 @@ echo "Starting parallel Pokémon data fetch..."
 fetch_pokemon() {
     pokemon="$1"
     echo "Fetching data for $pokemon..."
-    if curl -s -o "$data_dir/$pokemon.json" "https://pokeapi.co/api/v2/pokemon/$pokemon"; then
+    curl -s -o "$data_dir/$pokemon.json" "https://pokeapi.co/api/v2/pokemon/$pokemon"
+    if [ $? -eq 0 ]; then
         echo "Saved data to $data_dir/$pokemon.json ✅"
     else
-        echo "❌ Failed to fetch data for $pokemon" >> fetch_parallel_errors.log
+        echo "❌ Failed to fetch data for $pokemon" >> "$error_log"
     fi
 }
 
-# Start all fetches in the background
+# Start background fetches and record their PIDs
+pids=()
 for pokemon in "${pokemon_list[@]}"; do
     fetch_pokemon "$pokemon" &
+    pids+=($!)
 done
 
-# Wait for all background jobs to finish
+# Give all processes 10 seconds to complete
+sleep 10
+
+# Check each process and kill if still running
+for pid in "${pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+        echo "⏱️  Process $pid is taking too long — terminating..."
+        kill "$pid"
+    fi
+done
+
+# Wait for all background jobs to finish or be killed
 wait
 
-echo "✅ All Pokémon data fetched successfully!"
+echo "✅ Parallel batch processing complete!"
 
