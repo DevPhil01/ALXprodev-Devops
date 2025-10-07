@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Directory to store JSON files
+data_dir="pokemon_data_parallel"
+mkdir -p "$data_dir"
+
+# List of Pokémon to fetch
+pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
+
+echo "Starting parallel Pokémon data fetch..."
+
+# Function to fetch Pokémon data
+fetch_pokemon() {
+    pokemon="$1"
+    echo "Fetching data for $pokemon..."
+    if curl -s -o "$data_dir/$pokemon.json" "https://pokeapi.co/api/v2/pokemon/$pokemon"; then
+        echo "Saved data to $data_dir/$pokemon.json ✅"
+    else
+        echo "❌ Failed to fetch data for $pokemon" >> fetch_parallel_errors.log
+    fi
+}
+
+# Start all fetches in the background
+for pokemon in "${pokemon_list[@]}"; do
+    fetch_pokemon "$pokemon" &
+done
+
+# Wait for all background jobs to finish
+wait
+
+echo "✅ All Pokémon data fetched successfully!"
+
