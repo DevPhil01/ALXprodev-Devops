@@ -1,27 +1,58 @@
 #!/bin/bash
 
-# Create directory to store Pokémon data if it doesn't exist
-mkdir -p pokemon_data
+# Directory to store JSON files
+data_dir="pokemon_data"
+mkdir -p "$data_dir"
 
-# Define the list of Pokémon
+# List of Pokémon to fetch
 pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
 
-# Loop through each Pokémon in the list
+# Log file for errors
+error_log="fetch_errors.log"
+> "$error_log"  # Clear previous log content
+
+# Loop through each Pokémon
 for pokemon in "${pokemon_list[@]}"; do
     echo "Fetching data for $pokemon..."
-    
-    # Fetch data from the Pokémon API
-    response=$(curl -s -w "%{http_code}" -o "pokemon_data/${pokemon}.json" "https://pokeapi.co/api/v2/pokemon/${pokemon}")
-    
-    # Check if the request was successful (status code 200)
-    if [ "$response" -eq 200 ]; then
-        echo "Saved data to pokemon_data/${pokemon}.json ✅"
-    else
-        echo "Error fetching data for $pokemon (status code: $response)" >> errors.txt
-        echo "Failed to fetch $pokemon ❌"
+
+    # Initialize attempt counter
+    attempt=1
+    success=false
+
+    # Retry up to 3 times
+    while [ $attempt -le 3 ]; do
+        # Fetch data
+        response=$(curl -s -w "%{http_code}" -o "$data_dir/$pokemon.json" "https://pokeapi.co/api/v2/pokemon/$pokemon")
+
+        # Extract the HTTP status code
+        status_code="${response:(-3)}"
+
+        # Check if successful (status code 200)
+        if [ "$status_code" -eq 200 ]; then
+            echo "Saved data to $data_dir/$pokemon.json ✅"
+            success=true
+            break
+        else
+            echo "Attempt $attempt failed for $pokemon (HTTP $status_code)"
+            ((attempt++))
+            sleep 2  # Wait before retrying
+        fi
+    done
+
+    # If all 3 attempts failed, log the error
+    if [ "$success" = false ]; then
+        echo "❌ Failed to fetch data for $pokemon after 3 attempts" | tee -a "$error_log"
+        rm -f "$data_dir/$pokemon.json"  # Remove any incomplete file
     fi
-    
-    # Delay between requests to avoid rate-limiting (2 seconds)
-    sleep 2
+
+    echo ""  # Line break for readability
 done
+
+# Final message
+echo "All Pokémon processed!"
+if [ -s "$error_log" ]; then
+    echo "Some errors were logged in $error_log"
+else
+    echo "No errors encountered."
+fi
 
